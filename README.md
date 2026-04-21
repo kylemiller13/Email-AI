@@ -24,6 +24,9 @@ cd frontend && npm install && cd ..
 cp .env.example .env
 # Fill in GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET in .env
 
+# Download datasets from Kaggle (see "Datasets" section below)
+# Place all CSV files into ml/dataset/
+
 # Train the model (required before first run)
 python3 -m ml.train
 ```
@@ -87,6 +90,27 @@ email-risk-ai/
 ├── requirements.txt
 ├── .env.example
 └── CLAUDE.md
+```
+
+---
+
+## Datasets
+
+The CSV training files are not included in this repo (too large for GitHub). Download them from Kaggle and place each file in `ml/dataset/`.
+
+| File | Kaggle Source |
+|---|---|
+| `phishing_email.csv` | [Phishing Email Dataset](https://www.kaggle.com/datasets/naserabdullahalam/phishing-email-dataset) |
+| `Enron.csv` | [Enron Email Dataset](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset) |
+| `CEAS_08.csv` | [CEAS 2008 Spam Dataset](https://www.kaggle.com/datasets/rtatman/fraudulent-email-corpus) |
+| `SpamAssasin.csv` | [SpamAssassin Public Corpus](https://www.kaggle.com/datasets/beatoa/spamassassin-public-corpus) |
+| `Ling.csv` | [Ling-Spam Dataset](https://www.kaggle.com/datasets/mandygu/lingspam-dataset) |
+| `Nazario.csv` | [Jose Nazario Phishing Corpus](https://www.kaggle.com/datasets/naserabdullahalam/phishing-email-dataset) |
+| `Nigerian_Fraud.csv` | [Nigerian Fraud Email Dataset](https://www.kaggle.com/datasets/rtatman/fraudulent-email-corpus) |
+
+Once all files are in `ml/dataset/`, run:
+```bash
+python3 -m ml.train
 ```
 
 ---
