@@ -36,4 +36,5 @@ frontend/dist/
 *~
 .env.local
 ml/model.pkl
+ml/dataset/
 db/*.db
