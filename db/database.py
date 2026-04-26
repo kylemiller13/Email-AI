@@ -106,6 +106,28 @@ def insert_analysis_result(
         return cursor.lastrowid
 
 
+def update_analysis_result(
+    email_id: int,
+    classification: str,
+    confidence_score: float,
+    risk_level: str,
+    warning_signs: str,
+    explanation: str,
+) -> None:
+    """Update an existing analysis result for an email."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE analysis_results
+            SET classification = ?, confidence_score = ?, risk_level = ?,
+                warning_signs = ?, explanation = ?, analyzed_at = CURRENT_TIMESTAMP
+            WHERE email_id = ?
+            """,
+            (classification, confidence_score, risk_level, warning_signs, explanation, email_id),
+        )
+
+
 def insert_feedback(
     email_id: int, user_correction: str, notes: Optional[str] = None
 ) -> int:

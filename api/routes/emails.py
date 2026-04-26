@@ -4,6 +4,7 @@ from api.models.schemas import EmailScanRequest, EmailAnalysisResponse
 from db.database import (
     insert_email,
     insert_analysis_result,
+    update_analysis_result,
     get_all_emails_with_results,
     get_email_with_result,
 )
@@ -87,6 +88,42 @@ async def get_emails(user_email: str):
                 )
             )
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/rescan")
+async def rescan_all_emails(user_email: str):
+    """Re-run prediction on all stored emails and update analysis results."""
+    try:
+        from db.database import get_db
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT e.id, e.sender, e.subject, e.body
+                FROM emails e
+                JOIN analysis_results ar ON e.id = ar.email_id
+                WHERE e.user_email = ?
+                """,
+                (user_email,),
+            )
+            rows = cursor.fetchall()
+
+        updated = 0
+        for row in rows:
+            analysis = predict(body=row["body"], subject=row["subject"], sender=row["sender"])
+            update_analysis_result(
+                email_id=row["id"],
+                classification=analysis["classification"],
+                confidence_score=analysis["confidence_score"],
+                risk_level=analysis["risk_level"],
+                warning_signs=json.dumps(analysis["warning_signs"]),
+                explanation=analysis["explanation"],
+            )
+            updated += 1
+
+        return {"updated": updated, "message": f"Re-scanned {updated} email(s) successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
