@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from typing import List
 from api.models.schemas import EmailScanRequest, EmailAnalysisResponse
 from db.database import (
@@ -7,11 +7,41 @@ from db.database import (
     update_analysis_result,
     get_all_emails_with_results,
     get_email_with_result,
+    get_email_by_gmail_id,
 )
 from ml.predict import predict
 import json
+import base64
 
 router = APIRouter(prefix="/emails", tags=["emails"])
+
+MAX_FETCH = 50  # max emails to pull per fetch
+
+
+def _decode_body(data: str) -> str:
+    """Base64url-decode a Gmail message body part."""
+    padded = data + "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="replace")
+
+
+def _extract_plain_text(payload: dict) -> str:
+    """Recursively pull plain-text body from a Gmail message payload."""
+    mime_type = payload.get("mimeType", "")
+    body_data = payload.get("body", {}).get("data", "")
+
+    if mime_type == "text/plain" and body_data:
+        return _decode_body(body_data)
+
+    if mime_type == "text/html" and body_data:
+        # Fall back to HTML only if no plain part found higher up
+        return _decode_body(body_data)
+
+    for part in payload.get("parts", []):
+        result = _extract_plain_text(part)
+        if result:
+            return result
+
+    return ""
 
 
 @router.post("/scan", response_model=EmailAnalysisResponse)
@@ -88,6 +118,79 @@ async def get_emails(user_email: str):
                 )
             )
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fetch-from-gmail")
+async def fetch_from_gmail(request: Request, user_email: str):
+    """Fetch recent emails from Gmail, analyze them, and store results."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth_header.removeprefix("Bearer ").strip()
+
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+
+        creds = Credentials(token=token)
+        gmail = build("gmail", "v1", credentials=creds)
+
+        list_resp = gmail.users().messages().list(
+            userId="me", maxResults=MAX_FETCH
+        ).execute()
+        message_refs = list_resp.get("messages", [])
+
+        fetched = 0
+        skipped = 0
+
+        for ref in message_refs:
+            gmail_id = ref["id"]
+
+            # Skip emails already in the database
+            if get_email_by_gmail_id(gmail_id):
+                skipped += 1
+                continue
+
+            msg = gmail.users().messages().get(
+                userId="me", id=gmail_id, format="full"
+            ).execute()
+
+            payload = msg.get("payload", {})
+            headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+
+            subject = headers.get("subject", "(no subject)")
+            sender = headers.get("from", "")
+            date_str = headers.get("date", "")
+            body = _extract_plain_text(payload)
+
+            email_id = insert_email(
+                gmail_id=gmail_id,
+                sender=sender,
+                subject=subject,
+                body=body,
+                received_at=date_str,
+                user_email=user_email,
+            )
+
+            analysis = predict(body=body, subject=subject, sender=sender)
+            insert_analysis_result(
+                email_id=email_id,
+                classification=analysis["classification"],
+                confidence_score=analysis["confidence_score"],
+                risk_level=analysis["risk_level"],
+                warning_signs=json.dumps(analysis["warning_signs"]),
+                explanation=analysis["explanation"],
+            )
+            fetched += 1
+
+        return {
+            "fetched": fetched,
+            "skipped": skipped,
+            "message": f"Fetched and analyzed {fetched} new email(s). {skipped} already in database.",
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -60,6 +60,13 @@ const Dashboard = ({ userEmail, token }: DashboardProps) => {
   const fetchEmails = async () => {
     setLoading(true);
     try {
+      // Pull new emails from Gmail and analyze them
+      await fetch(
+        `http://localhost:9000/emails/fetch-from-gmail?user_email=${encodeURIComponent(userEmail)}`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Load all analyzed emails from the database
       const response = await fetch(
         `http://localhost:9000/emails?user_email=${encodeURIComponent(userEmail)}`,
         { headers: { Authorization: `Bearer ${token}` } }
