@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -13,9 +13,17 @@ import {
   Tab,
   TabPanel,
   SimpleGrid,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightElement,
+  IconButton,
+  Text,
 } from '@chakra-ui/react';
+import { SearchIcon, CloseIcon } from '@chakra-ui/icons';
 import EmailCard from '../components/EmailCard';
 import EmailDetailModal from '../components/EmailDetailModal';
+import PhishingSummary from '../components/PhishingSummary';
 
 interface Email {
   id: string;
@@ -56,6 +64,7 @@ const Dashboard = ({ userEmail, token }: DashboardProps) => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchEmails = async () => {
     setLoading(true);
@@ -87,9 +96,19 @@ const Dashboard = ({ userEmail, token }: DashboardProps) => {
     fetchEmails();
   }, []);
 
-  const criticalEmails = emails.filter((e) => e.risk_level === 'critical');
-  const warningEmails = emails.filter((e) => e.risk_level === 'warning');
-  const safeEmails = emails.filter((e) => e.risk_level === 'safe');
+  const filteredEmails = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return emails;
+    return emails.filter(
+      (e) =>
+        e.subject.toLowerCase().includes(q) ||
+        e.from.toLowerCase().includes(q)
+    );
+  }, [emails, searchQuery]);
+
+  const criticalEmails = filteredEmails.filter((e) => e.risk_level === 'critical');
+  const warningEmails = filteredEmails.filter((e) => e.risk_level === 'warning');
+  const safeEmails = filteredEmails.filter((e) => e.risk_level === 'safe');
 
   return (
     <Container maxW="container.xl" py={8}>
@@ -106,12 +125,44 @@ const Dashboard = ({ userEmail, token }: DashboardProps) => {
           </Button>
         </HStack>
 
+        {/* Phishing Activity Summary */}
+        <PhishingSummary userEmail={userEmail} token={token} />
+
+        {/* Search */}
+        {emails.length > 0 && (
+          <InputGroup>
+            <InputLeftElement pointerEvents="none">
+              <SearchIcon color="gray.400" />
+            </InputLeftElement>
+            <Input
+              placeholder="Search by subject or sender…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              bg="gray.800"
+              borderColor="gray.600"
+              _hover={{ borderColor: 'gray.500' }}
+              _focus={{ borderColor: 'brand.500', boxShadow: 'none' }}
+            />
+            {searchQuery && (
+              <InputRightElement>
+                <IconButton
+                  aria-label="Clear search"
+                  icon={<CloseIcon boxSize={2.5} />}
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setSearchQuery('')}
+                />
+              </InputRightElement>
+            )}
+          </InputGroup>
+        )}
+
         {/* Email Tabs */}
         {emails.length > 0 ? (
           <Tabs variant="soft-rounded" colorScheme="brand">
             <TabList mb={4}>
               <Tab>
-                All ({emails.length})
+                All ({filteredEmails.length}{searchQuery ? ` of ${emails.length}` : ''})
               </Tab>
               <Tab color="semantic.critical">
                 Critical ({criticalEmails.length})
@@ -127,54 +178,84 @@ const Dashboard = ({ userEmail, token }: DashboardProps) => {
             <TabPanels>
               {/* All Emails */}
               <TabPanel>
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {emails.map((email) => (
-                    <EmailCard
-                      key={email.id}
-                      email={email}
-                      onClick={() => setSelectedEmail(email)}
-                    />
-                  ))}
-                </SimpleGrid>
+                {filteredEmails.length === 0 ? (
+                  <Center py={12}>
+                    <Text color="gray.500">No emails match &quot;{searchQuery}&quot;</Text>
+                  </Center>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    {filteredEmails.map((email) => (
+                      <EmailCard
+                        key={email.id}
+                        email={email}
+                        onClick={() => setSelectedEmail(email)}
+                      />
+                    ))}
+                  </SimpleGrid>
+                )}
               </TabPanel>
 
               {/* Critical Emails */}
               <TabPanel>
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {criticalEmails.map((email) => (
-                    <EmailCard
-                      key={email.id}
-                      email={email}
-                      onClick={() => setSelectedEmail(email)}
-                    />
-                  ))}
-                </SimpleGrid>
+                {criticalEmails.length === 0 ? (
+                  <Center py={12}>
+                    <Text color="gray.500">
+                      {searchQuery ? `No critical emails match "${searchQuery}"` : 'No critical emails'}
+                    </Text>
+                  </Center>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    {criticalEmails.map((email) => (
+                      <EmailCard
+                        key={email.id}
+                        email={email}
+                        onClick={() => setSelectedEmail(email)}
+                      />
+                    ))}
+                  </SimpleGrid>
+                )}
               </TabPanel>
 
               {/* Warning Emails */}
               <TabPanel>
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {warningEmails.map((email) => (
-                    <EmailCard
-                      key={email.id}
-                      email={email}
-                      onClick={() => setSelectedEmail(email)}
-                    />
-                  ))}
-                </SimpleGrid>
+                {warningEmails.length === 0 ? (
+                  <Center py={12}>
+                    <Text color="gray.500">
+                      {searchQuery ? `No warning emails match "${searchQuery}"` : 'No warning emails'}
+                    </Text>
+                  </Center>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    {warningEmails.map((email) => (
+                      <EmailCard
+                        key={email.id}
+                        email={email}
+                        onClick={() => setSelectedEmail(email)}
+                      />
+                    ))}
+                  </SimpleGrid>
+                )}
               </TabPanel>
 
               {/* Safe Emails */}
               <TabPanel>
-                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                  {safeEmails.map((email) => (
-                    <EmailCard
-                      key={email.id}
-                      email={email}
-                      onClick={() => setSelectedEmail(email)}
-                    />
-                  ))}
-                </SimpleGrid>
+                {safeEmails.length === 0 ? (
+                  <Center py={12}>
+                    <Text color="gray.500">
+                      {searchQuery ? `No safe emails match "${searchQuery}"` : 'No safe emails'}
+                    </Text>
+                  </Center>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+                    {safeEmails.map((email) => (
+                      <EmailCard
+                        key={email.id}
+                        email={email}
+                        onClick={() => setSelectedEmail(email)}
+                      />
+                    ))}
+                  </SimpleGrid>
+                )}
               </TabPanel>
             </TabPanels>
           </Tabs>

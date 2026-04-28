@@ -12,10 +12,99 @@ from db.database import (
 from ml.predict import predict
 import json
 import base64
+import re
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 router = APIRouter(prefix="/emails", tags=["emails"])
 
 MAX_FETCH = 50  # max emails to pull per fetch
+
+# Maps each warning-sign label to a plain-language tactic category
+WARNING_TO_TACTIC: dict[str, str] = {
+    "Contains urgency language": "Urgency & Pressure",
+    "Subject line contains urgency words": "Urgency & Pressure",
+    "Contains threatening language about account suspension": "Urgency & Pressure",
+    "Requests credentials or sensitive personal info": "Credential Harvesting",
+    "URL contains credential/login keyword": "Credential Harvesting",
+    "Contains an HTML form (credential harvesting)": "Credential Harvesting",
+    "URL uses raw IP address instead of domain": "Malicious Links",
+    "Contains shortened/obfuscated URL": "Malicious Links",
+    "URL with suspicious top-level domain (.xyz, .tk, etc.)": "Malicious Links",
+    "Uses insecure HTTP links (not HTTPS)": "Malicious Links",
+    "Contains multiple URLs": "Malicious Links",
+    "Uses generic greeting (Dear Customer, Dear User)": "Impersonation",
+    "Sender display name doesn't match email domain": "Impersonation",
+    "Sent from a free email provider (Gmail, Yahoo, etc.)": "Spoofed Sender",
+    "Sender domain contains unusual numbers or hyphens": "Spoofed Sender",
+    "Contains money/prize/lottery language": "Financial Scam",
+    "Contains JavaScript": "Technical Attack",
+    "Excessive use of capital letters": "Aggressive Formatting",
+    "Excessive exclamation marks": "Aggressive Formatting",
+    "Heavy use of HTML formatting": "Aggressive Formatting",
+    "References a file attachment": "Malicious Attachment",
+}
+
+# keyword (in normalized domain) → (display name, real domain)
+BRAND_KEYWORDS: dict[str, tuple] = {
+    "paypal": ("PayPal", "paypal.com"),
+    "paypa": ("PayPal", "paypal.com"),
+    "amazon": ("Amazon", "amazon.com"),
+    "google": ("Google", "google.com"),
+    "microsoft": ("Microsoft", "microsoft.com"),
+    "apple": ("Apple", "apple.com"),
+    "netflix": ("Netflix", "netflix.com"),
+    "facebook": ("Facebook", "facebook.com"),
+    "instagram": ("Instagram", "instagram.com"),
+    "linkedin": ("LinkedIn", "linkedin.com"),
+    "dropbox": ("Dropbox", "dropbox.com"),
+    "chase": ("Chase Bank", "chase.com"),
+    "wellsfargo": ("Wells Fargo", "wellsfargo.com"),
+    "citibank": ("Citibank", "citibank.com"),
+    "ebay": ("eBay", "ebay.com"),
+    "fedex": ("FedEx", "fedex.com"),
+    "bankofamerica": ("Bank of America", "bankofamerica.com"),
+}
+
+
+def _parse_received_at(date_str: str):
+    """Parse ISO or RFC 2822 email date to a timezone-aware datetime."""
+    if not date_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(date_str)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        pass
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _sender_domain(sender: str) -> str:
+    """Extract the domain portion from a sender string."""
+    m = re.search(r"@([\w.\-]+)", sender)
+    return m.group(1).lower() if m else ""
+
+
+def _normalize_domain(domain: str) -> str:
+    """Replace common homograph digits so 'amaz0n' matches 'amazon'."""
+    subs = {"0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "6": "g", "8": "b"}
+    return "".join(subs.get(c, c) for c in domain.lower())
+
+
+def _detect_impersonation(domain: str):
+    """Return (domain, brand_name, real_domain) if domain spoofs a known brand, else None."""
+    norm = _normalize_domain(domain)
+    for keyword, (brand_name, real_domain) in BRAND_KEYWORDS.items():
+        if keyword in norm:
+            if domain == real_domain or domain.endswith("." + real_domain):
+                return None  # it IS the real domain
+            return (domain, brand_name, real_domain)
+    return None
 
 
 def _decode_body(data: str) -> str:
@@ -227,6 +316,102 @@ async def rescan_all_emails(user_email: str):
             updated += 1
 
         return {"updated": updated, "message": f"Re-scanned {updated} email(s) successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/summary")
+async def get_email_summary(user_email: str, days: int = 30):
+    """Return a phishing activity summary for the given time window."""
+    try:
+        rows = get_all_emails_with_results(user_email)
+
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        period_start = now - timedelta(days=days)
+        prev_start = period_start - timedelta(days=days)
+
+        current_phishing = []
+        previous_phishing = []
+        for row in rows:
+            if row["classification"] != "phishing":
+                continue
+            dt = _parse_received_at(row["received_at"])
+            if dt is None:
+                continue
+            if dt >= period_start:
+                current_phishing.append(row)
+            elif dt >= prev_start:
+                previous_phishing.append(row)
+
+        total = len(current_phishing)
+        prev_total = len(previous_phishing)
+
+        if prev_total == 0 and total == 0:
+            trend, pct = "same", None
+        elif prev_total == 0:
+            trend, pct = "new", None
+        elif total > prev_total:
+            trend = "up"
+            pct = round((total - prev_total) / prev_total * 100)
+        elif total < prev_total:
+            trend = "down"
+            pct = round((prev_total - total) / prev_total * 100)
+        else:
+            trend, pct = "same", 0
+
+        # Daily breakdown — one entry per day, oldest first
+        daily: dict[str, int] = {}
+        for i in range(days):
+            day = today - timedelta(days=days - 1 - i)
+            daily[str(day)] = 0
+        for row in current_phishing:
+            dt = _parse_received_at(row["received_at"])
+            if dt:
+                ds = str(dt.date())
+                if ds in daily:
+                    daily[ds] += 1
+        daily_breakdown = [{"date": d, "count": c} for d, c in daily.items()]
+
+        # Top tactic — aggregate warning signs into categories
+        tactic_counter: Counter = Counter()
+        for row in current_phishing:
+            try:
+                signs = json.loads(row["warning_signs"]) if row["warning_signs"] else []
+            except Exception:
+                signs = []
+            for sign in signs:
+                tactic_counter[WARNING_TO_TACTIC.get(sign, "Other")] += 1
+        top_tactic = None
+        if tactic_counter:
+            label, count = tactic_counter.most_common(1)[0]
+            top_tactic = {"label": label, "count": count}
+
+        # Impersonated brands — deduplicated
+        seen: set = set()
+        impersonated = []
+        for row in current_phishing:
+            domain = _sender_domain(row["sender"] or "")
+            result = _detect_impersonation(domain)
+            if result and result[1] not in seen:
+                seen.add(result[1])
+                impersonated.append({
+                    "spoofed": result[0],
+                    "brand": result[1],
+                    "real_domain": result[2],
+                })
+
+        return {
+            "days": days,
+            "total_threats": total,
+            "previous_total": prev_total,
+            "percent_change": pct,
+            "trend": trend,
+            "daily_breakdown": daily_breakdown,
+            "top_tactic": top_tactic,
+            "impersonated_domains": impersonated,
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
