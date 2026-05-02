@@ -145,12 +145,6 @@ const Admin = ({ token, userEmail }: AdminProps) => {
         ).toFixed(1)
       : '0';
 
-  const falsePositives = feedback.filter(
-    (f) => f.user_correction === 'legitimate' && f.original_classification === 'phishing'
-  );
-  const falseNegatives = feedback.filter(
-    (f) => f.user_correction === 'phishing' && f.original_classification === 'legitimate'
-  );
 
   return (
     <Container maxW="container.xl" py={8}>
@@ -274,15 +268,10 @@ const Admin = ({ token, userEmail }: AdminProps) => {
         {/* Feedback log */}
         <Box>
           <HStack justify="space-between" mb={4}>
-            <Heading size="md">User Feedback Log</Heading>
-            <HStack spacing={3}>
-              <Badge colorScheme="orange" px={2} py={1} rounded="full">
-                {falsePositives.length} false positives
-              </Badge>
-              <Badge colorScheme="yellow" px={2} py={1} rounded="full">
-                {falseNegatives.length} false negatives
-              </Badge>
-            </HStack>
+            <Heading size="md">User Reports</Heading>
+            <Badge colorScheme="orange" px={2} py={1} rounded="full">
+              {feedback.length} flagged for review
+            </Badge>
           </HStack>
 
           {loadingFeedback ? (
@@ -290,7 +279,7 @@ const Admin = ({ token, userEmail }: AdminProps) => {
           ) : feedback.length === 0 ? (
             <Box bg="gray.800" p={6} rounded="lg" border="1px" borderColor="gray.700" textAlign="center">
               <CheckCircleIcon color="green.400" boxSize={6} mb={2} />
-              <Text color="gray.400">No user corrections submitted yet.</Text>
+              <Text color="gray.400">No emails reported for review yet.</Text>
             </Box>
           ) : (
             <TableContainer bg="gray.800" rounded="lg" border="1px" borderColor="gray.700">
@@ -299,64 +288,39 @@ const Admin = ({ token, userEmail }: AdminProps) => {
                   <Tr>
                     <Th color="gray.400" borderColor="gray.700">Sender</Th>
                     <Th color="gray.400" borderColor="gray.700">Subject</Th>
-                    <Th color="gray.400" borderColor="gray.700">Model said</Th>
-                    <Th color="gray.400" borderColor="gray.700">User says</Th>
-                    <Th color="gray.400" borderColor="gray.700">Type</Th>
+                    <Th color="gray.400" borderColor="gray.700">Model verdict</Th>
+                    <Th color="gray.400" borderColor="gray.700">Status</Th>
                     <Th color="gray.400" borderColor="gray.700">Reported</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {feedback.map((entry) => {
-                    const isFP =
-                      entry.user_correction === 'legitimate' &&
-                      entry.original_classification === 'phishing';
-                    const isFN =
-                      entry.user_correction === 'phishing' &&
-                      entry.original_classification === 'legitimate';
-                    return (
-                      <Tr key={entry.id} _hover={{ bg: 'gray.750' }}>
-                        <Td borderColor="gray.700" maxW="160px" isTruncated color="gray.300" fontSize="xs">
-                          {entry.sender}
-                        </Td>
-                        <Td borderColor="gray.700" maxW="200px" isTruncated color="gray.300" fontSize="xs">
-                          {entry.subject}
-                        </Td>
-                        <Td borderColor="gray.700">
-                          <Badge
-                            colorScheme={entry.original_classification === 'phishing' ? 'red' : 'green'}
-                            fontSize="xs"
-                          >
-                            {entry.original_classification}
-                          </Badge>
-                        </Td>
-                        <Td borderColor="gray.700">
-                          <Badge
-                            colorScheme={entry.user_correction === 'phishing' ? 'red' : 'green'}
-                            fontSize="xs"
-                          >
-                            {entry.user_correction}
-                          </Badge>
-                        </Td>
-                        <Td borderColor="gray.700">
-                          {isFP && (
-                            <HStack spacing={1}>
-                              <WarningIcon color="orange.400" boxSize={3} />
-                              <Text fontSize="xs" color="orange.400">False Positive</Text>
-                            </HStack>
-                          )}
-                          {isFN && (
-                            <HStack spacing={1}>
-                              <WarningIcon color="yellow.400" boxSize={3} />
-                              <Text fontSize="xs" color="yellow.400">False Negative</Text>
-                            </HStack>
-                          )}
-                        </Td>
-                        <Td borderColor="gray.700" color="gray.500" fontSize="xs">
-                          {new Date(entry.reported_at).toLocaleDateString()}
-                        </Td>
-                      </Tr>
-                    );
-                  })}
+                  {feedback.map((entry) => (
+                    <Tr key={entry.id} _hover={{ bg: 'gray.750' }}>
+                      <Td borderColor="gray.700" maxW="160px" isTruncated color="gray.300" fontSize="xs">
+                        {entry.sender}
+                      </Td>
+                      <Td borderColor="gray.700" maxW="200px" isTruncated color="gray.300" fontSize="xs">
+                        {entry.subject}
+                      </Td>
+                      <Td borderColor="gray.700">
+                        <Badge
+                          colorScheme={entry.original_classification === 'phishing' ? 'red' : 'green'}
+                          fontSize="xs"
+                        >
+                          {entry.original_classification}
+                        </Badge>
+                      </Td>
+                      <Td borderColor="gray.700">
+                        <HStack spacing={1}>
+                          <WarningIcon color="orange.400" boxSize={3} />
+                          <Text fontSize="xs" color="orange.400">Flagged for review</Text>
+                        </HStack>
+                      </Td>
+                      <Td borderColor="gray.700" color="gray.500" fontSize="xs">
+                        {new Date(entry.reported_at).toLocaleDateString()}
+                      </Td>
+                    </Tr>
+                  ))}
                 </Tbody>
               </Table>
             </TableContainer>

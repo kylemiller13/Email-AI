@@ -11,14 +11,13 @@ async def submit_feedback(request: FeedbackRequest):
     try:
         feedback_id = insert_feedback(
             email_id=request.email_id,
-            user_correction=request.user_correction,
+            user_correction="flagged",
             notes=request.notes,
         )
         return {
             "feedback_id": feedback_id,
             "email_id": request.email_id,
-            "user_correction": request.user_correction,
-            "notes": request.notes,
+            "message": "Email flagged for admin review.",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

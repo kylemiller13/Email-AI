@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -36,6 +37,26 @@ interface EmailDetailModalProps {
 }
 
 const EmailDetailModal = ({ email, isOpen, onClose }: EmailDetailModalProps) => {
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
+
+  const handleReport = async () => {
+    if (!email || reported) return;
+    setReporting(true);
+    try {
+      await fetch('http://localhost:9000/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_id: parseInt(email.id) }),
+      });
+      setReported(true);
+    } catch {
+      // silently fail — non-critical action
+    } finally {
+      setReporting(false);
+    }
+  };
+
   if (!email) return null;
 
   const getRiskIcon = (level: string) => {
@@ -176,9 +197,23 @@ const EmailDetailModal = ({ email, isOpen, onClose }: EmailDetailModalProps) => 
         </ModalBody>
 
         <ModalFooter>
-          <Button colorScheme="brand" onClick={onClose}>
-            Close
-          </Button>
+          <HStack spacing={3} w="full" justify="space-between">
+            <Button
+              variant="ghost"
+              colorScheme={reported ? 'green' : 'gray'}
+              size="sm"
+              leftIcon={reported ? <CheckCircleIcon /> : <WarningIcon />}
+              onClick={handleReport}
+              isLoading={reporting}
+              isDisabled={reported}
+              loadingText="Reporting…"
+            >
+              {reported ? 'Reported for review' : 'Report this email'}
+            </Button>
+            <Button colorScheme="brand" onClick={onClose}>
+              Close
+            </Button>
+          </HStack>
         </ModalFooter>
       </ModalContent>
     </Modal>

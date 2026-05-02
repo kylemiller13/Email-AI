@@ -40,10 +40,10 @@ class EmailAnalysisResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """Feedback from user on an email analysis."""
+    """Feedback from user flagging an email for admin review."""
     email_id: int
-    user_correction: str  # "phishing" or "legitimate"
     notes: Optional[str] = None
+    user_correction: str = "flagged"  # kept for DB compatibility; users no longer provide a label
 
 
 class MetricsResponse(BaseModel):
