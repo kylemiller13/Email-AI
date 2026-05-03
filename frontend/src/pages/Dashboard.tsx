@@ -19,6 +19,7 @@ import {
   InputRightElement,
   IconButton,
   Text,
+  useToast,
 } from '@chakra-ui/react';
 import { SearchIcon, CloseIcon } from '@chakra-ui/icons';
 import EmailCard from '../components/EmailCard';
@@ -58,22 +59,35 @@ const normalizeEmail = (raw: any): Email => {
 interface DashboardProps {
   userEmail: string;
   token: string;
+  onSessionExpired: () => void;
 }
 
-const Dashboard = ({ userEmail, token }: DashboardProps) => {
+const Dashboard = ({ userEmail, token, onSessionExpired }: DashboardProps) => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const toast = useToast();
 
   const fetchEmails = async () => {
     setLoading(true);
     try {
       // Pull new emails from Gmail and analyze them
-      await fetch(
+      const gmailResp = await fetch(
         `http://localhost:9000/emails/fetch-from-gmail?user_email=${encodeURIComponent(userEmail)}`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
       );
+      if (gmailResp.status === 401) {
+        toast({
+          title: 'Session expired',
+          description: 'Your Gmail session has expired. Please sign in again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+        onSessionExpired();
+        return;
+      }
 
       // Load all analyzed emails from the database
       const response = await fetch(

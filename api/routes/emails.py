@@ -222,6 +222,8 @@ async def fetch_from_gmail(request: Request, user_email: str):
     try:
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
+        from google.auth.exceptions import RefreshError
+        from googleapiclient.errors import HttpError
 
         creds = Credentials(token=token)
         gmail = build("gmail", "v1", credentials=creds)
@@ -280,6 +282,11 @@ async def fetch_from_gmail(request: Request, user_email: str):
             "message": f"Fetched and analyzed {fetched} new email(s). {skipped} already in database.",
         }
 
+    except (RefreshError, HttpError) as e:
+        status = getattr(getattr(e, "resp", None), "status", None)
+        if isinstance(e, RefreshError) or status == 401:
+            raise HTTPException(status_code=401, detail="Gmail session expired. Please sign in again.")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

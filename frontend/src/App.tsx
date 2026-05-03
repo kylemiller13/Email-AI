@@ -215,7 +215,7 @@ function App() {
 
       {/* Main Content */}
       {activePage === 'dashboard' ? (
-        <Dashboard userEmail={auth.userEmail || ''} token={auth.token || ''} />
+        <Dashboard userEmail={auth.userEmail || ''} token={auth.token || ''} onSessionExpired={handleLogout} />
       ) : (
         <Admin token={auth.token || ''} userEmail={auth.userEmail || ''} />
       )}
