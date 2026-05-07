@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import emails, feedback, admin, oauth
+from api.routes import emails, feedback, admin, oauth, compare
 from db.database import init_db
 
 # Initialize database
@@ -27,6 +27,7 @@ app.include_router(emails.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
 app.include_router(oauth.router)
+app.include_router(compare.router)
 
 
 @app.get("/health")

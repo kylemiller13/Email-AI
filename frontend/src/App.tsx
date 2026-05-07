@@ -26,6 +26,7 @@ import {
 import { MoonIcon, SunIcon, HamburgerIcon } from '@chakra-ui/icons';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
+import Compare from './pages/Compare';
 import SignIn from './pages/SignIn';
 
 interface AuthState {
@@ -42,7 +43,7 @@ function App() {
     token: null,
   });
   const [loading, setLoading] = useState(true);
-  const [activePage, setActivePage] = useState<'dashboard' | 'admin'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'admin' | 'compare'>('dashboard');
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
@@ -136,6 +137,14 @@ function App() {
                 >
                   Admin
                 </Button>
+                <Button
+                  variant={activePage === 'compare' ? 'solid' : 'ghost'}
+                  colorScheme={activePage === 'compare' ? 'brand' : undefined}
+                  size="sm"
+                  onClick={() => setActivePage('compare')}
+                >
+                  Spot the Phish
+                </Button>
               </HStack>
             </HStack>
 
@@ -205,6 +214,14 @@ function App() {
               >
                 Admin
               </Button>
+              <Button
+                variant={activePage === 'compare' ? 'solid' : 'ghost'}
+                colorScheme="brand"
+                onClick={() => { setActivePage('compare'); onClose(); }}
+                w="full"
+              >
+                Spot the Phish
+              </Button>
               <Button colorScheme="red" onClick={handleLogout} w="full">
                 Sign Out
               </Button>
@@ -216,6 +233,8 @@ function App() {
       {/* Main Content */}
       {activePage === 'dashboard' ? (
         <Dashboard userEmail={auth.userEmail || ''} token={auth.token || ''} onSessionExpired={handleLogout} />
+      ) : activePage === 'compare' ? (
+        <Compare />
       ) : (
         <Admin token={auth.token || ''} userEmail={auth.userEmail || ''} />
       )}
