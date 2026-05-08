@@ -14,7 +14,7 @@ import {
   Tooltip,
   Divider,
 } from '@chakra-ui/react';
-import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from '@chakra-ui/icons';
+import { ArrowUpIcon, ArrowDownIcon, MinusIcon, InfoIcon } from '@chakra-ui/icons';
 
 interface DailyStat {
   date: string;
@@ -47,6 +47,96 @@ interface PhishingSummaryProps {
   userEmail: string;
   token: string;
 }
+
+interface Tip {
+  headline: string;
+  detail: string;
+}
+
+function personalizedTip(tactic: string): Tip {
+  switch (tactic) {
+    case 'Urgency & Pressure':
+      return {
+        headline: 'Always wait 5 minutes before acting on an urgent email.',
+        detail:
+          'Attackers rely on panic to make you act before you think. A real emergency from your bank, employer, or a service will have other ways to reach you — phone, app notification, or a letter. If waiting 5 minutes feels risky, that feeling is the attack working.',
+      };
+    case 'Impersonation':
+      return {
+        headline: 'Verify by going to the company\'s website directly.',
+        detail:
+          'If an email claims to be from PayPal, Google, or your bank, close the email and open a new browser tab. Type the company\'s real address yourself. Never use links or phone numbers from inside the email — those can lead to fakes.',
+      };
+    case 'Credential Harvesting':
+      return {
+        headline: 'Never enter your password by following a link from an email.',
+        detail:
+          'Legitimate services will never ask you to confirm your password via email. If you\'re asked to log in, open the site directly in your browser and log in there instead. If the request was real, you\'ll see it once you\'re signed in.',
+      };
+    case 'Malicious Links':
+      return {
+        headline: 'Check where a link actually goes before you click.',
+        detail:
+          'On a computer, hover over a link to see the real URL in your browser\'s status bar. On mobile, hold the link to preview it. If the domain looks unfamiliar or misspelled — or uses unusual endings like .xyz or .tk — don\'t click.',
+      };
+    case 'Financial Scam':
+      return {
+        headline: 'Legitimate prizes and windfalls never ask for upfront payment.',
+        detail:
+          'If an email offers you money, a prize, or an inheritance, it\'s a scam. Real lotteries don\'t contact winners by email. Any message asking you to pay fees or provide bank details to "release" funds is designed to steal from you.',
+      };
+    case 'Spoofed Sender':
+      return {
+        headline: 'Check the actual email address, not just the display name.',
+        detail:
+          'Anyone can set their display name to "PayPal Support" or "Apple Inc." — what matters is the email address after the @. Click the sender\'s name to expand it and look at the full address. A real company email always comes from its own domain.',
+      };
+    case 'Aggressive Formatting':
+      return {
+        headline: 'Excessive CAPS and !!! are pressure tactics, not urgency.',
+        detail:
+          'Professional companies communicate calmly. Heavy capitalisation and exclamation marks are designed to trigger a stress response and override your judgement. Treat overly dramatic formatting as a warning sign, not a reason to act faster.',
+      };
+    case 'Malicious Attachment':
+      return {
+        headline: 'Never open attachments you weren\'t expecting.',
+        detail:
+          'Even a file that looks like a PDF or spreadsheet can contain malware. If you weren\'t expecting a file from this sender, call or message them through a separate channel to confirm they actually sent it before opening anything.',
+      };
+    case 'Technical Attack':
+      return {
+        headline: 'Decline any request to enable macros, scripts, or extensions.',
+        detail:
+          'Legitimate documents and emails don\'t need to run code on your computer. If you open a file and it asks you to "enable content," "allow macros," or install something, close it immediately and report it.',
+      };
+    default:
+      return {
+        headline: 'When in doubt, verify through a separate channel.',
+        detail:
+          'If something feels off about an email, trust that instinct. Contact the sender directly using a phone number or address you already know — not one provided in the suspicious email.',
+      };
+  }
+}
+
+const TipPanel = ({ tactic }: { tactic: string }) => {
+  const tip = personalizedTip(tactic);
+  return (
+    <Box mt={4} bg="blue.900" p={4} rounded="lg" border="1px" borderColor="blue.700">
+      <HStack spacing={2} mb={2}>
+        <InfoIcon color="blue.300" boxSize={3.5} />
+        <Text fontSize="xs" color="blue.300" fontWeight="700" textTransform="uppercase">
+          Tips for You — based on your inbox
+        </Text>
+      </HStack>
+      <Text fontSize="sm" fontWeight="600" color="gray.100" mb={1}>
+        {tip.headline}
+      </Text>
+      <Text fontSize="xs" color="gray.400" lineHeight="1.7">
+        {tip.detail}
+      </Text>
+    </Box>
+  );
+};
 
 const formatDate = (dateStr: string) =>
   new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
@@ -185,6 +275,7 @@ const PhishingSummary = ({ userEmail, token }: PhishingSummaryProps) => {
           <Text color="gray.500">Could not load summary.</Text>
         </Center>
       ) : (
+        <>
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
           {/* ── Total Threats ── */}
           <Box bg="gray.700" p={4} rounded="lg" border="1px" borderColor="gray.600">
@@ -314,6 +405,10 @@ const PhishingSummary = ({ userEmail, token }: PhishingSummaryProps) => {
             )}
           </Box>
         </SimpleGrid>
+
+        {/* ── Tips for You ── */}
+        {summary.top_tactic && <TipPanel tactic={summary.top_tactic.label} />}
+        </>
       )}
     </Box>
   );
