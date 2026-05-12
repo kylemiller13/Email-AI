@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     user_correction TEXT NOT NULL,
     reported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
+    admin_label TEXT DEFAULT NULL,
     FOREIGN KEY (email_id) REFERENCES emails (id) ON DELETE CASCADE
 );
 

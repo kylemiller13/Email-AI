@@ -46,6 +46,11 @@ class FeedbackRequest(BaseModel):
     user_correction: str = "flagged"  # kept for DB compatibility; users no longer provide a label
 
 
+class LabelRequest(BaseModel):
+    """Admin label for a flagged feedback entry."""
+    label: Optional[str] = None  # "false_positive" | "false_negative" | "correct" | None to clear
+
+
 class MetricsResponse(BaseModel):
     """Model performance metrics."""
     total_analyzed: int

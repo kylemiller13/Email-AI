@@ -128,6 +128,16 @@ def update_analysis_result(
         )
 
 
+def set_feedback_admin_label(feedback_id: int, label: Optional[str]) -> None:
+    """Set or clear the admin review label on a feedback entry."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE feedback SET admin_label = ? WHERE id = ?",
+            (label, feedback_id),
+        )
+
+
 def insert_feedback(
     email_id: int, user_correction: str, notes: Optional[str] = None
 ) -> int:
@@ -231,6 +241,7 @@ def get_all_feedback(user_email: str):
                 f.user_correction,
                 f.reported_at,
                 f.notes,
+                f.admin_label,
                 e.sender,
                 e.subject,
                 ar.classification,
@@ -272,9 +283,8 @@ def get_metrics(user_email: str):
         cursor.execute(
             """
             SELECT COUNT(*) as count FROM feedback f
-            JOIN analysis_results ar ON f.email_id = ar.email_id
-            JOIN emails e ON ar.email_id = e.id
-            WHERE f.user_correction = 'legitimate' AND ar.classification = 'phishing'
+            JOIN emails e ON f.email_id = e.id
+            WHERE f.admin_label = 'false_positive'
             AND e.user_email = ?
             """,
             (user_email,),
@@ -284,9 +294,8 @@ def get_metrics(user_email: str):
         cursor.execute(
             """
             SELECT COUNT(*) as count FROM feedback f
-            JOIN analysis_results ar ON f.email_id = ar.email_id
-            JOIN emails e ON ar.email_id = e.id
-            WHERE f.user_correction = 'phishing' AND ar.classification = 'legitimate'
+            JOIN emails e ON f.email_id = e.id
+            WHERE f.admin_label = 'false_negative'
             AND e.user_email = ?
             """,
             (user_email,),

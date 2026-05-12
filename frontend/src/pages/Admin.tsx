@@ -29,7 +29,7 @@ import {
   useToast,
   Divider,
 } from '@chakra-ui/react';
-import { RepeatIcon, WarningIcon, CheckCircleIcon } from '@chakra-ui/icons';
+import { RepeatIcon, CheckCircleIcon } from '@chakra-ui/icons';
 
 interface Metrics {
   total_analyzed: number;
@@ -39,6 +39,8 @@ interface Metrics {
   false_negatives: number;
 }
 
+type AdminLabel = 'false_positive' | 'false_negative' | 'correct' | null;
+
 interface FeedbackEntry {
   id: number;
   email_id: number;
@@ -47,6 +49,7 @@ interface FeedbackEntry {
   user_correction: string;
   reported_at: string;
   notes: string | null;
+  admin_label: AdminLabel;
   original_classification: string;
   original_risk_level: string;
 }
@@ -95,6 +98,23 @@ const Admin = ({ token, userEmail }: AdminProps) => {
     fetchMetrics();
     fetchFeedback();
   }, [fetchMetrics, fetchFeedback]);
+
+  const handleLabel = async (feedbackId: number, current: AdminLabel, next: AdminLabel) => {
+    const label = current === next ? null : next; // clicking active label clears it
+    setFeedback((prev) =>
+      prev.map((f) => (f.id === feedbackId ? { ...f, admin_label: label } : f))
+    );
+    try {
+      await fetch(`http://localhost:9000/admin/feedback/${feedbackId}/label`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ label }),
+      });
+      fetchMetrics();
+    } catch {
+      fetchFeedback(); // revert on error
+    }
+  };
 
   const handleRetrain = async () => {
     setRetraining(true);
@@ -200,14 +220,14 @@ const Admin = ({ token, userEmail }: AdminProps) => {
                 <Stat>
                   <StatLabel color="gray.400">False Positives</StatLabel>
                   <StatNumber color="orange.400">{metrics.false_positives}</StatNumber>
-                  <StatHelpText color="gray.500">flagged incorrectly</StatHelpText>
+                  <StatHelpText color="gray.500">admin confirmed</StatHelpText>
                 </Stat>
               </Box>
               <Box bg="gray.800" p={5} rounded="lg" border="1px" borderColor="yellow.800">
                 <Stat>
                   <StatLabel color="gray.400">False Negatives</StatLabel>
                   <StatNumber color="yellow.400">{metrics.false_negatives}</StatNumber>
-                  <StatHelpText color="gray.500">missed phishing</StatHelpText>
+                  <StatHelpText color="gray.500">admin confirmed</StatHelpText>
                 </Stat>
               </Box>
             </SimpleGrid>
@@ -289,7 +309,7 @@ const Admin = ({ token, userEmail }: AdminProps) => {
                     <Th color="gray.400" borderColor="gray.700">Sender</Th>
                     <Th color="gray.400" borderColor="gray.700">Subject</Th>
                     <Th color="gray.400" borderColor="gray.700">Model verdict</Th>
-                    <Th color="gray.400" borderColor="gray.700">Status</Th>
+                    <Th color="gray.400" borderColor="gray.700">Admin review</Th>
                     <Th color="gray.400" borderColor="gray.700">Reported</Th>
                   </Tr>
                 </Thead>
@@ -312,8 +332,33 @@ const Admin = ({ token, userEmail }: AdminProps) => {
                       </Td>
                       <Td borderColor="gray.700">
                         <HStack spacing={1}>
-                          <WarningIcon color="orange.400" boxSize={3} />
-                          <Text fontSize="xs" color="orange.400">Flagged for review</Text>
+                          <Button
+                            size="xs"
+                            variant={entry.admin_label === 'false_positive' ? 'solid' : 'outline'}
+                            colorScheme={entry.admin_label === 'false_positive' ? 'orange' : 'gray'}
+                            borderColor="gray.600"
+                            onClick={() => handleLabel(entry.id, entry.admin_label, 'false_positive')}
+                          >
+                            FP
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant={entry.admin_label === 'false_negative' ? 'solid' : 'outline'}
+                            colorScheme={entry.admin_label === 'false_negative' ? 'yellow' : 'gray'}
+                            borderColor="gray.600"
+                            onClick={() => handleLabel(entry.id, entry.admin_label, 'false_negative')}
+                          >
+                            FN
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant={entry.admin_label === 'correct' ? 'solid' : 'outline'}
+                            colorScheme={entry.admin_label === 'correct' ? 'green' : 'gray'}
+                            borderColor="gray.600"
+                            onClick={() => handleLabel(entry.id, entry.admin_label, 'correct')}
+                          >
+                            <CheckCircleIcon />
+                          </Button>
                         </HStack>
                       </Td>
                       <Td borderColor="gray.700" color="gray.500" fontSize="xs">

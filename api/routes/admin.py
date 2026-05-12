@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from api.models.schemas import MetricsResponse
-from db.database import get_metrics, get_all_feedback
+from api.models.schemas import MetricsResponse, LabelRequest
+from db.database import get_metrics, get_all_feedback, set_feedback_admin_label
 import subprocess
 import os
 
@@ -13,6 +13,19 @@ async def get_admin_metrics(user_email: str):
     try:
         metrics = get_metrics(user_email)
         return MetricsResponse(**metrics)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/feedback/{feedback_id}/label")
+async def label_feedback(feedback_id: int, request: LabelRequest):
+    """Set or clear the admin review label on a flagged email."""
+    valid = {None, "false_positive", "false_negative", "correct"}
+    if request.label not in valid:
+        raise HTTPException(status_code=400, detail=f"label must be one of {valid - {None}}")
+    try:
+        set_feedback_admin_label(feedback_id, request.label)
+        return {"feedback_id": feedback_id, "admin_label": request.label}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -31,6 +44,7 @@ async def get_all_feedback_entries(user_email: str):
                 "user_correction": row["user_correction"],
                 "reported_at": row["reported_at"],
                 "notes": row["notes"],
+                "admin_label": row["admin_label"],
                 "original_classification": row["classification"],
                 "original_risk_level": row["risk_level"],
             }
