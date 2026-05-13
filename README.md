@@ -89,7 +89,7 @@ email-risk-ai/
 │   └── simulate_phishing.py
 ├── requirements.txt
 ├── .env.example
-└── CLAUDE.md
+
 ```
 
 ---
